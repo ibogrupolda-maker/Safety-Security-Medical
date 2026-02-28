@@ -7,6 +7,8 @@ import { ADMINS } from '../constants';
 import { AdminUser } from '../types';
 import { auditLogger } from '../services/auditLogger';
 
+import { supabase } from '../services/supabase';
+
 interface LoginProps {
   onLoginSuccess: (user: AdminUser) => void;
 }
@@ -15,6 +17,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [view, setView] = useState<'login' | 'signup' | 'forgot' | 'activate' | 'welcome'>('login');
   const [step, setStep] = useState<'form' | 'checking' | '2fa' | 'success'>('form');
   const [identityInput, setIdentityInput] = useState('');
+  const [password, setPassword] = useState(''); // Adicionado para Supabase Auth
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState<{msg: string, code?: string} | null>(null);
   const [detectedLocation, setDetectedLocation] = useState<string | null>(null);
@@ -41,7 +44,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleLoginSubmit = (e?: React.FormEvent, quickUser?: AdminUser) => {
+  const handleLoginSubmit = async (e?: React.FormEvent, quickUser?: AdminUser) => {
     if (e) e.preventDefault();
     
     const input = quickUser ? quickUser.id : identityInput.trim();
@@ -52,7 +55,49 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }
     
     setError(null);
+    setStep('checking');
+
+    // Tentar Supabase Auth se houver password (ou se for login real)
+    if (!quickUser && password) {
+      try {
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email: input.includes('@') ? input : `${input}@ssm.co.mz`, // Mock email if username
+          password: password,
+        });
+
+        if (authError) throw authError;
+
+        if (data.user) {
+          // Em um cenário real, buscaríamos o perfil do usuário na tabela 'profiles'
+          // Aqui vamos simular encontrando no mock ou criando um objeto AdminUser
+          const userFromMock = (ADMINS as any[]).find(u => u.email === data.user?.email);
+          const user: AdminUser = userFromMock || {
+            id: data.user.id,
+            name: data.user.user_metadata.full_name || 'Utilizador Supabase',
+            role: data.user.user_metadata.role || 'COLABORADOR_RH',
+            avatar: `https://ui-avatars.com/api/?name=${data.user.email}&background=random`,
+            initials: 'US',
+            username: data.user.email?.split('@')[0] || 'user',
+            email: data.user.email || '',
+            phone: '',
+            address: '',
+            dob: '',
+            gender: 'M',
+            idDocument: ''
+          };
+          
+          setAuthenticatedUser(user);
+          handlePostAuth(user);
+          return;
+        }
+      } catch (err: any) {
+        setStep('form');
+        setError({ msg: err.message || 'Erro na autenticação Supabase.' });
+        return;
+      }
+    }
     
+    // Fallback para Mock Login (Quick Access)
     const user = quickUser || (ADMINS as any[]).find(u => 
       u.id.toLowerCase() === input.toLowerCase() || 
       u.email.toLowerCase() === input.toLowerCase() ||
@@ -60,20 +105,23 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     );
 
     if (!user) {
+      setStep('form');
       setError({ msg: 'Identidade de acesso não reconhecida no diretório SSM.' });
       return;
     }
 
     setAuthenticatedUser(user);
-    setStep('checking');
-    
+    handlePostAuth(user);
+  };
+
+  const handlePostAuth = (user: AdminUser) => {
     setTimeout(() => {
       if (user.role === 'OPERADOR_COORD' || user.role === 'ADMIN_SSM') {
         setStep('2fa');
       } else {
         showWelcome(user);
       }
-    }, 2000);
+    }, 1500);
   };
 
   const showWelcome = (user: AdminUser) => {
@@ -145,6 +193,20 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                       value={identityInput}
                       onChange={(e) => setIdentityInput(e.target.value)}
                       placeholder="ID (ex: ADM-001, OP-002, DRV-004)"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-black focus:ring-4 focus:ring-blue-500/10 outline-none transition-all placeholder:text-slate-300"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Palavra-passe (Opcional para Demo)</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
+                    <input 
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-black focus:ring-4 focus:ring-blue-500/10 outline-none transition-all placeholder:text-slate-300"
                     />
                   </div>

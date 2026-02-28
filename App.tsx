@@ -19,6 +19,8 @@ import { EmergencyCase, EmergencyPriority, AdminUser, AmbulanceState, OperationR
 import { COMPANIES as INITIAL_COMPANIES, ADMINS, AMBULANCES as INITIAL_AMBULANCES, EMPLOYEES as INITIAL_EMPLOYEES, RESOURCES as INITIAL_RESOURCES } from './constants';
 import { auditLogger } from './services/auditLogger';
 
+import { supabase } from './services/supabase';
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
@@ -30,6 +32,41 @@ const App: React.FC = () => {
   const [incidents, setIncidents] = useState<EmergencyCase[]>([
     { id: 'SSM-MZ-001', timestamp: '12:00', type: 'Crise Hipertensiva', locationName: 'Torre Absa', status: 'active', priority: EmergencyPriority.HIGH, coords: [-25.9680, 32.5710], companyId: 'ABSA' },
   ]);
+
+  useEffect(() => {
+    // Verificar sessão existente no Supabase
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const userFromMock = (ADMINS as any[]).find(u => u.email === session.user?.email);
+        const user: AdminUser = userFromMock || {
+          id: session.user.id,
+          name: session.user.user_metadata.full_name || 'Utilizador Supabase',
+          role: session.user.user_metadata.role || 'COLABORADOR_RH',
+          avatar: `https://ui-avatars.com/api/?name=${session.user.email}&background=random`,
+          initials: 'US',
+          username: session.user.email?.split('@')[0] || 'user',
+          email: session.user.email || '',
+          phone: '',
+          address: '',
+          dob: '',
+          gender: 'M',
+          idDocument: ''
+        };
+        setCurrentUser(user);
+      }
+    };
+    checkSession();
+
+    // Ouvir mudanças na autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleLogin = (user: AdminUser) => {
     setCurrentUser(user);
@@ -166,12 +203,17 @@ const App: React.FC = () => {
     return employees;
   }, [employees, currentUser]);
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+  };
+
   if (!currentUser) return <Login onLoginSuccess={handleLogin} />;
 
   // MODO MOTORISTA
   if (currentUser.role === 'MOTORISTA_AMB') {
     const myIncident = incidents.find(i => i.ambulanceState?.id === 'ALPHA-1' && i.status !== 'closed');
-    return <AmbulanceMode adminName={currentUser.name} onLogout={() => setCurrentUser(null)} incident={myIncident || null} onUpdateAmbulance={updateAmbulanceState} onUpdateStatus={updateIncidentStatus} />;
+    return <AmbulanceMode adminName={currentUser.name} onLogout={handleLogout} incident={myIncident || null} onUpdateAmbulance={updateAmbulanceState} onUpdateStatus={updateIncidentStatus} />;
   }
 
   // MODO CORPORATIVO
@@ -180,14 +222,14 @@ const App: React.FC = () => {
   if (isCorporate) {
     return (
       <div className="flex min-h-screen bg-[#F8F9FB] text-slate-900 font-sans">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userRole={currentUser.role} onLogout={() => setCurrentUser(null)} />
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userRole={currentUser.role} onLogout={handleLogout} />
         <main className="flex-1 flex flex-col h-screen overflow-hidden">
-          <TopBar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={() => setCurrentUser(null)} />
+          <TopBar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
           <div className="flex-1 overflow-hidden h-full">
             {activeTab === 'corporate_sos' && (
               <CorporateClientMode 
                 adminName={currentUser.name} 
-                onLogout={() => setCurrentUser(null)} 
+                onLogout={handleLogout} 
                 onTriggerEmergency={() => {
                   const newInc: EmergencyCase = {
                     id: `SOS-${Math.floor(Math.random() * 9000) + 1000}`,
@@ -242,9 +284,9 @@ const App: React.FC = () => {
 
   return (
     <div className="flex min-h-screen bg-[#F8F9FB] text-slate-900 font-sans">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userRole={currentUser.role} onLogout={() => setCurrentUser(null)} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userRole={currentUser.role} onLogout={handleLogout} />
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <TopBar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={() => setCurrentUser(null)} />
+        <TopBar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           {activeTab === 'dashboard' && (
             <DashboardOverview 

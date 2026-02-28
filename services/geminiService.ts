@@ -2,11 +2,23 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ProtocolSuggestion } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = () => {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is missing. Please set it in your environment variables.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+};
 
 export const getProtocolAdvice = async (scenario: string): Promise<ProtocolSuggestion> => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3.1-pro-preview',
     contents: `Analise o seguinte cenário de emergência médica e classifique-o de acordo com os protocolos padrão (A: Crítico/Emergência, B: Elevado/Urgente, C: Moderado/Semi-urgente, D: Baixo/Não urgente). 
     Cenário: "${scenario}"
     Forneça a resposta em formato JSON seguindo estritamente o esquema definido. Importante: Use Português de Portugal (PT-PT) em todos os textos explicativos.`,

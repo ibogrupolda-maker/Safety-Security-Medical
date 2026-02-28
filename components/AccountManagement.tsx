@@ -11,6 +11,8 @@ import { UserRole, AdminUser } from '../types';
 import { COMPANIES, ADMINS } from '../constants';
 import { auditLogger } from '../services/auditLogger';
 
+import { supabase } from '../services/supabase';
+
 const AccountManagement: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [view, setView] = useState<'list' | 'create' | 'edit'>('list');
   const [accounts, setAccounts] = useState<AdminUser[]>(ADMINS);
@@ -18,6 +20,7 @@ const AccountManagement: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<string>('todos');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [password, setPassword] = useState(''); // Adicionado para Supabase
 
   // Form State para Criação/Edição
   const [formData, setFormData] = useState<Partial<AdminUser>>({
@@ -45,6 +48,7 @@ const AccountManagement: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       name: '', email: '', phone: '', role: 'OPERADOR_COORD', 
       companyId: '', idDocument: '', username: '', initials: ''
     });
+    setPassword('');
     setView('create');
   };
 
@@ -71,12 +75,29 @@ const AccountManagement: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
-    setTimeout(() => {
+    try {
       if (view === 'create') {
+        // Se houver password, tentar criar no Supabase
+        if (password && formData.email) {
+          const { data, error } = await supabase.auth.signUp({
+            email: formData.email,
+            password: password,
+            options: {
+              data: {
+                full_name: formData.name,
+                role: formData.role,
+                company_id: formData.companyId
+              }
+            }
+          });
+          if (error) throw error;
+          console.log('User created in Supabase:', data.user);
+        }
+
         const newId = `SSM-${Math.floor(Math.random() * 9000) + 1000}`;
         const newUser: AdminUser = {
           ...(formData as AdminUser),
@@ -90,9 +111,12 @@ const AccountManagement: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setAccounts(prev => prev.map(a => a.id === selectedUser?.id ? { ...a, ...formData } : a));
       }
       
-      setIsSubmitting(false);
       setView('list');
-    }, 1000);
+    } catch (err: any) {
+      alert(`Erro ao processar conta: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getRoleBadge = (role: string) => {
@@ -289,6 +313,18 @@ const AccountManagement: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         onChange={e => setFormData({...formData, phone: e.target.value})}
                       />
                     </div>
+                    {view === 'create' && (
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Palavra-passe (Supabase Auth)</label>
+                        <input 
+                          type="password" 
+                          className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black focus:border-blue-600 outline-none transition-all"
+                          value={password}
+                          onChange={e => setPassword(e.target.value)}
+                          placeholder="Mínimo 6 caracteres"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {formData.role === 'ADMIN_CLIENTE' && (

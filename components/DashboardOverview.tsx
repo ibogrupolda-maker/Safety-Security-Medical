@@ -15,7 +15,6 @@ import { EmergencyCase, EmergencyPriority, Employee, Company, OperationReport, A
 import { COMPANIES, EMPLOYEES, PRIORITY_COLORS, AMBULANCES } from '../constants';
 import EmergencyCommunication from './EmergencyCommunication';
 import NetworkMap from './NetworkMap';
-import L from 'leaflet';
 import { auditLogger } from '../services/auditLogger';
 
 interface DashboardOverviewProps {
@@ -51,9 +50,6 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const [commIncidentId, setCommIncidentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-
   const getNearbyAmbulances = (incidentCoords: [number, number]) => {
     return ambulances.map(amb => {
       const dist = Math.sqrt(Math.pow(amb.currentPos[0] - incidentCoords[0], 2) + Math.pow(amb.currentPos[1] - incidentCoords[1], 2)) * 111;
@@ -135,32 +131,40 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
                <div className="space-y-3 mb-8">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ambulâncias Mais Próximas</h4>
-                  {getNearbyAmbulances(incidents.find(i => i.id === dispatchModalId)!.coords).map((amb) => (
-                    <div key={amb.id} className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between hover:border-blue-500 transition-all group">
-                       <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-blue-600"><Truck className="w-5 h-5" /></div>
-                          <div>
-                            <p className="text-xs font-black text-slate-900 leading-none mb-1">{amb.id}</p>
-                            <span className="text-[10px] font-black text-blue-600 uppercase flex items-center gap-1">ETA {amb.eta} min</span>
-                          </div>
-                       </div>
-                       <button onClick={() => handleDispatch(amb.id)} className="px-5 py-2.5 bg-slate-950 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg">Despachar</button>
-                    </div>
-                  ))}
+                  {(() => {
+                    const incident = incidents.find(i => i.id === dispatchModalId);
+                    if (!incident) return null;
+                    return getNearbyAmbulances(incident.coords).map((amb) => (
+                      <div key={amb.id} className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between hover:border-blue-500 transition-all group">
+                         <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-blue-600"><Truck className="w-5 h-5" /></div>
+                            <div>
+                              <p className="text-xs font-black text-slate-900 leading-none mb-1">{amb.id}</p>
+                              <span className="text-[10px] font-black text-blue-600 uppercase flex items-center gap-1">ETA {amb.eta} min</span>
+                            </div>
+                         </div>
+                         <button onClick={() => handleDispatch(amb.id)} className="px-5 py-2.5 bg-slate-950 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg">Despachar</button>
+                      </div>
+                    ));
+                  })()}
                </div>
 
                <div>
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-3">Rede Hospitalar Próxima</h4>
                   <div className="grid grid-cols-1 gap-2">
-                     {getNearbyHospitals(incidents.find(i => i.id === dispatchModalId)!.coords).map(h => (
-                        <div key={h.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                           <div className="flex items-center gap-3">
-                              <Hospital className="w-4 h-4 text-emerald-600" />
-                              <span className="text-xs font-bold text-slate-700">{h.name}</span>
-                           </div>
-                           <span className="text-[9px] font-black text-slate-400 uppercase">{h.distance.toFixed(1)} km</span>
-                        </div>
-                     ))}
+                     {(() => {
+                        const incident = incidents.find(i => i.id === dispatchModalId);
+                        if (!incident) return null;
+                        return getNearbyHospitals(incident.coords).map(h => (
+                          <div key={h.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                             <div className="flex items-center gap-3">
+                                <Hospital className="w-4 h-4 text-emerald-600" />
+                                <span className="text-xs font-bold text-slate-700">{h.name}</span>
+                             </div>
+                             <span className="text-[9px] font-black text-slate-400 uppercase">{h.distance.toFixed(1)} km</span>
+                          </div>
+                        ));
+                     })()}
                   </div>
                </div>
             </div>

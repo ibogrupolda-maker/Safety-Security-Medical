@@ -35,11 +35,7 @@ const NetworkMap: React.FC<NetworkMapProps> = ({
     incidents: L.LayerGroup;
     hospitals: L.LayerGroup;
     ambulances: L.LayerGroup;
-  }>({
-    incidents: L.layerGroup(),
-    hospitals: L.layerGroup(),
-    ambulances: L.layerGroup()
-  });
+  } | null>(null);
 
   const providers = resources.map(res => ({
     id: res.id,
@@ -65,18 +61,39 @@ const NetworkMap: React.FC<NetworkMapProps> = ({
   };
 
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
-    const initialCoords: [number, number] = [-25.9692, 32.5732]; 
-    mapRef.current = L.map(mapContainerRef.current, { zoomControl: false, attributionControl: false }).setView(initialCoords, 13);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(mapRef.current);
-    layersRef.current.incidents.addTo(mapRef.current);
-    layersRef.current.hospitals.addTo(mapRef.current);
-    layersRef.current.ambulances.addTo(mapRef.current);
-    L.control.zoom({ position: 'bottomright' }).addTo(mapRef.current);
-    return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+    if (!mapContainerRef.current) return;
+
+    // Initialize layers if not already done
+    if (!layersRef.current) {
+      layersRef.current = {
+        incidents: L.layerGroup(),
+        hospitals: L.layerGroup(),
+        ambulances: L.layerGroup()
+      };
+    }
+
+    if (!mapRef.current) {
+      const initialCoords: [number, number] = [-25.9692, 32.5732]; 
+      mapRef.current = L.map(mapContainerRef.current, { zoomControl: false, attributionControl: false }).setView(initialCoords, 13);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(mapRef.current);
+      
+      layersRef.current.incidents.addTo(mapRef.current);
+      layersRef.current.hospitals.addTo(mapRef.current);
+      layersRef.current.ambulances.addTo(mapRef.current);
+      
+      L.control.zoom({ position: 'bottomright' }).addTo(mapRef.current);
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
+    if (!layersRef.current) return;
     const group = layersRef.current.incidents;
     group.clearLayers();
     incidents.forEach(inc => {
@@ -103,7 +120,7 @@ const NetworkMap: React.FC<NetworkMapProps> = ({
   const TRUCK_SVG = `<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-5h-7v5a1 1 0 0 0 1 1h2"/><path d="M16 8h3l3 3v2h-6V8z"/><circle cx="7.5" cy="18.5" r="2.5"/><circle cx="17.5" cy="18.5" r="2.5"/>`;
 
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !layersRef.current) return;
     layersRef.current.hospitals.clearLayers();
     layersRef.current.ambulances.clearLayers();
     providers.forEach(p => {
@@ -153,7 +170,9 @@ const NetworkMap: React.FC<NetworkMapProps> = ({
       
       if (isSelected) marker.openTooltip();
     });
-    mapRef.current.on('click', () => setSelectedProviderId(null));
+    if (mapRef.current) {
+      mapRef.current.on('click', () => setSelectedProviderId(null));
+    }
     return () => { if (mapRef.current) mapRef.current.off('click'); };
   }, [selectedProviderId]);
 
